@@ -3,18 +3,18 @@ name: Evaluate Submission
 on:
   pull_request:
     paths:
-      - 'submission/*.csv'  # fixed folder name
+      - 'submission/*.csv'  # trigger only on submission CSVs
 
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    
+
     steps:
-      # 1️⃣ Checkout the public repo
-      - name: Checkout repository
+      # 1️⃣ Checkout public repo (PR branch)
+      - name: Checkout public repo
         uses: actions/checkout@v3
 
-      # 2️⃣ Checkout the private repo with test labels
+      # 2️⃣ Checkout private repo (contains test_labels.csv)
       - name: Checkout private repo
         uses: actions/checkout@v3
         with:
@@ -32,7 +32,23 @@ jobs:
       - name: Install dependencies
         run: pip install pandas scikit-learn numpy
 
-      # 5️⃣ Run evaluation
-      - name: Run evaluation
+      # 5️⃣ Evaluate all CSVs in submission folder
+      - name: Evaluate submissions
         run: |
-          python evaluate.py submission/submission.csv private_data/evaluation/test_labels.csv
+          mkdir -p results
+          for file in submission/*.csv; do
+            echo "Evaluating $file..."
+            python evaluate.py "$file" "private_data/test_labels.csv"
+          done
+
+      # 6️⃣ Commit and push only results.csv to main branch
+      - name: Commit leaderboard
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git checkout main
+          git add results.csv
+          git commit -m "Update leaderboard from PR #${{ github.event.number }}" || echo "No changes to commit"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
